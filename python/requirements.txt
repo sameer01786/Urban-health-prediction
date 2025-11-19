@@ -1,7 +1,2 @@
-pandas
-scikit-learn
-numpy
 Flask
 Flask-Cors
-matplotlib
-seaborn
