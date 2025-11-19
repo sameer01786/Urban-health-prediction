@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tree Health Predictor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-gray-100 font-sans flex items-center justify-center min-h-screen">
+
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-lg">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">
+            🌳 Pune Tree Health Predictor
+        </h1>
+        <p class="text-center text-gray-600 mb-8">
+            Enter the details of a tree to predict its health condition using the best ML model.
+        </p>
+
+        <form id="tree-form" class="space-y-6">
+            
+            <div>
+                <label for="common_name" class="block text-sm font-medium text-gray-700">Common Name</label>
+                <select id="common_name" name="common_name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3">
+                    <option>Loading categories...</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="ward_name" class="block text-sm font-medium text-gray-700">Ward Name (Number)</label>
+                <select id="ward_name" name="ward_name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3">
+                    <option>Loading categories...</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="ownership" class="block text-sm font-medium text-gray-700">Ownership</label>
+                <select id="ownership" name="ownership" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3">
+                    <option>Loading categories...</option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4">
+                <div>
+                    <label for="canopy_dia_m" class="block text-sm font-medium text-gray-700">Canopy (m)</label>
+                    <input type="number" step="0.1" id="canopy_dia_m" name="canopy_dia_m" value="1.0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3">
+                </div>
+                
+                <div>
+                    <label for="girth_cm" class="block text-sm font-medium text-gray-700">Girth (cm)</label>
+                    <input type="number" step="1" id="girth_cm" name="girth_cm" value="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3">
+                </div>
+                
+                <div>
+                    <label for="height_m" class="block text-sm font-medium text-gray-700">Height (m)</label>
+                    <input type="number" step="0.1" id="height_m" name="height_m" value="2.0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3">
+                </div>
+            </div>
+
+            <div>
+                <button type="submit" id="submit-button" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Predict Health
+                </button>
+            </div>
+        </form>
+
+        <div id="result-container" class="mt-8 text-center p-6 bg-gray-50 rounded-lg" style="display: none;">
+            <h2 class="text-xl font-semibold text-gray-800">Prediction Result:</h2>
+            <p id="result-text" class="text-3xl font-bold mt-2"></p>
+        </div>
+
+    </div>
+
+    <script>
+        // URLs for our two servers
+        const NODE_SERVER_URL = 'http://127.0.0.1:3000/get-prediction';
+        const PYTHON_SERVER_URL = 'http://127.0.0.1:5000'; // Our Python server
+
+        const treeForm = document.getElementById('tree-form');
+        const submitButton = document.getElementById('submit-button');
+        const resultContainer = document.getElementById('result-container');
+        const resultText = document.getElementById('result-text');
+
+        // --- NEW: Function to populate a dropdown ---
+        function populateDropdown(selectId, options) {
+            const selectElement = document.getElementById(selectId);
+            selectElement.innerHTML = ''; // Clear "Loading..."
+            
+            // Sort options alphabetically, numbers will sort naturally
+            options.sort();
+
+            options.forEach(optionValue => {
+                const option = document.createElement('option');
+                option.value = optionValue;
+                option.textContent = optionValue;
+                selectElement.appendChild(option);
+            });
+        }
+
+        // --- NEW: Run this when the page loads ---
+        window.addEventListener('DOMContentLoaded', async () => {
+            console.log("Page loaded. Fetching categories...");
+            try {
+                const response = await fetch(`${PYTHON_SERVER_URL}/get-categories`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch categories');
+                }
+                const categories = await response.json();
+                
+                // Populate all three dropdowns
+                populateDropdown('common_name', categories.common_name);
+                populateDropdown('ward_name', categories.ward_name);
+                populateDropdown('ownership', categories.ownership);
+
+                console.log("Categories loaded successfully.");
+
+            } catch (error) {
+                console.error('Error loading categories:', error);
+                document.getElementById('common_name').innerHTML = '<option>Error loading</option>';
+                document.getElementById('ward_name').innerHTML = '<option>Error loading</option>';
+                document.getElementById('ownership').innerHTML = '<option>Error loading</option>';
+            }
+        });
+
+
+        // --- Prediction logic (Modified slightly to fix a bug) ---
+        treeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            submitButton.disabled = true;
+            submitButton.textContent = 'Predicting...';
+            
+            resultContainer.style.display = 'block';
+            resultText.className = 'text-2xl font-bold mt-2 text-gray-600';
+            resultText.textContent = 'Getting prediction...';
+
+            try {
+                const formData = new FormData(treeForm);
+                const plainFormData = Object.fromEntries(formData.entries());
+
+                const dataToSend = {
+                    common_name: plainFormData.common_name,
+                    ward_name: plainFormData.ward_name, // This will be a string
+                    ownership: plainFormData.ownership,
+                    canopy_dia_m: parseFloat(plainFormData.canopy_dia_m) || null,
+                    girth_cm: parseFloat(plainFormData.girth_cm) || null,
+                    height_m: parseFloat(plainFormData.height_m) || null
+                };
+                
+                const response = await fetch(NODE_SERVER_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    // *** BUG FIX: Was JSON.JSON.stringify, changed to JSON.stringify ***
+                    body: JSON.stringify(dataToSend)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Network response was not ok');
+                }
+
+                const result = await response.json();
+                
+                if(result.error) {
+                    throw new Error(result.error);
+                }
+                
+                const prediction = result.health_prediction;
+                resultText.textContent = prediction;
+
+                if (prediction === 'Healthy') {
+                    resultText.className = 'text-3xl font-bold mt-2 text-green-600';
+                } else if (prediction === 'Average') {
+                    resultText.className = 'text-3xl font-bold mt-2 text-yellow-600';
+                } else {
+                    resultText.className = 'text-3xl font-bold mt-2 text-red-600';
+                }
+
+            } catch (error) {
+                console.error('Fetch error:', error);
+                resultText.className = 'text-xl font-bold mt-2 text-red-600';
+                resultText.textContent = `Error: ${error.message}`;
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Predict Health';
+            }
+        });
+    </script>
+</body>
+</html>
