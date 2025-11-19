@@ -12,7 +12,7 @@ app.use(express.json());
 
 app.use(express.static(path.join(__dirname)));
 
-const PYTHON_API_URL = 'http://127.0.0.1:5000/predict';
+const PYTHON_API_URL = 'https://urban-health-prediction-1.onrender.com';
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
